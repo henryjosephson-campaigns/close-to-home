@@ -8,7 +8,7 @@ returns null — narrate it as "geocoded addresses".
 import random
 
 SEED = 42
-N_PEOPLE = 400
+N_PEOPLE = 1200
 
 # (name, center_lat, center_lng, sigma, zip)
 CLUSTERS = [
@@ -17,8 +17,22 @@ CLUSTERS = [
     ("Land Park", 38.545, -121.510, 0.012, "95818"),
     ("Natomas", 38.650, -121.510, 0.016, "95835"),
     ("Elk Grove", 38.410, -121.370, 0.020, "95624"),
+    ("Downtown", 38.581, -121.494, 0.008, "95814"),
+    ("Oak Park", 38.545, -121.462, 0.010, "95817"),
+    ("Tahoe Park", 38.546, -121.437, 0.010, "95820"),
+    ("Pocket-Greenhaven", 38.495, -121.535, 0.013, "95831"),
+    ("Meadowview", 38.468, -121.465, 0.012, "95832"),
+    ("South Sacramento", 38.500, -121.440, 0.015, "95823"),
+    ("Del Paso Heights", 38.630, -121.450, 0.013, "95838"),
+    ("Arden-Arcade", 38.600, -121.385, 0.015, "95825"),
+    ("South Natomas", 38.615, -121.510, 0.012, "95833"),
+    ("Rosemont", 38.552, -121.355, 0.013, "95826"),
 ]
-CLUSTER_WEIGHTS = [0.28, 0.22, 0.20, 0.15, 0.15]
+CLUSTER_WEIGHTS = [
+    0.11, 0.09, 0.08, 0.07, 0.07,
+    0.05, 0.07, 0.06, 0.06, 0.06,
+    0.07, 0.06, 0.06, 0.05, 0.04,
+]
 
 FIRST_NAMES = [
     "James", "Maria", "Robert", "Linda", "Michael", "Patricia", "David",
