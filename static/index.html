@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Close to Home — Event Proximity Outreach</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --border: rgba(11,11,11,0.10);
+    --inside: #008300;      /* series green: person is reachable */
+    --outside: #898781;     /* muted: person is out of range */
+    --iso: #2a78d6;         /* series blue: isochrone polygon */
+    --success-text: #006300;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { display: flex; height: 100vh; background: var(--page); color: var(--ink); }
+  #map { flex: 1; height: 100%; }
+
+  /* ---------- sidebar ---------- */
+  aside {
+    width: 360px; min-width: 360px; height: 100%; overflow-y: auto;
+    background: var(--surface-1); border-left: 1px solid var(--grid);
+    padding: 20px; display: flex; flex-direction: column; gap: 16px;
+  }
+  h1 { font-size: 18px; }
+  .subtitle { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+  .badge-demo {
+    font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2);
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px;
+    vertical-align: 2px; margin-left: 6px;
+  }
+  label.field-label { font-size: 11px; font-weight: 600; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px; }
+
+  .seg { display: flex; border: 1px solid var(--grid); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    flex: 1; padding: 8px 4px; font-size: 13px; border: 0; background: transparent;
+    cursor: pointer; color: var(--ink-2); font-family: inherit;
+  }
+  .seg button.active { background: var(--ink); color: #fff; font-weight: 600; }
+
+  select {
+    width: 100%; padding: 8px 10px; font-size: 13.5px; font-family: inherit;
+    border: 1px solid var(--grid); border-radius: 8px; background: var(--surface-1);
+  }
+  .scout-hint { font-size: 12.5px; color: var(--ink-2); background: var(--page);
+    border: 1px dashed var(--grid); border-radius: 8px; padding: 10px; display: none; }
+
+  input[type=range] { width: 100%; accent-color: var(--iso); }
+  .slider-labels { display: flex; justify-content: space-between; font-size: 10.5px;
+    color: var(--muted); padding: 0 2px; }
+  .slider-value { font-size: 13.5px; margin-top: 4px; }
+  .slider-value b { font-size: 15px; }
+
+  /* ---------- stat tiles ---------- */
+  .hero { border: 1px solid var(--grid); border-radius: 10px; padding: 14px 16px; }
+  .hero .big { font-size: 34px; font-weight: 700; line-height: 1.1; }
+  .hero .big small { font-size: 16px; font-weight: 400; color: var(--ink-2); }
+  .hero .cap { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; }
+  .tile .v { font-size: 20px; font-weight: 700; }
+  .tile .k { font-size: 11.5px; color: var(--ink-2); margin-top: 1px; }
+
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-2); }
+  .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px;
+    border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  .legend .in::before { background: var(--inside); }
+  .legend .out::before { background: var(--outside); opacity: .55; }
+  .legend .poly::before { background: var(--iso); border-radius: 2px; opacity: .35;
+    outline: 1.5px solid var(--iso); outline-offset: -1.5px; }
+
+  /* ---------- people list ---------- */
+  .list-wrap { flex: 1; min-height: 140px; display: flex; flex-direction: column; }
+  .list-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .list-head .n { font-size: 11.5px; color: var(--muted); }
+  ul#people-list { list-style: none; overflow-y: auto; flex: 1;
+    border: 1px solid var(--grid); border-radius: 10px; }
+  ul#people-list li { padding: 8px 12px; border-bottom: 1px solid var(--grid); font-size: 13px;
+    display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  ul#people-list li:last-child { border-bottom: 0; }
+  .p-name { font-weight: 600; }
+  .p-addr { font-size: 11.5px; color: var(--ink-2); }
+  .chips { display: flex; gap: 4px; flex-shrink: 0; }
+  .chip { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--ink-2); white-space: nowrap; }
+  .queued { color: var(--success-text); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+
+  .cta {
+    padding: 11px; font-size: 14px; font-weight: 600; font-family: inherit;
+    border: 0; border-radius: 9px; background: var(--ink); color: #fff; cursor: pointer;
+  }
+  .cta:disabled { opacity: .4; cursor: default; }
+
+  /* ---------- modal ---------- */
+  .overlay { position: fixed; inset: 0; background: rgba(11,11,11,.45);
+    display: none; align-items: center; justify-content: center; z-index: 2000; }
+  .overlay.open { display: flex; }
+  .modal { width: 520px; max-width: calc(100vw - 40px); background: var(--surface-1);
+    border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .modal h2 { font-size: 16px; }
+  .modal .sub { font-size: 12.5px; color: var(--ink-2); }
+  .tabs { display: flex; gap: 6px; }
+  .tabs button { padding: 6px 14px; font-size: 12.5px; font-family: inherit; border-radius: 999px;
+    border: 1px solid var(--grid); background: transparent; cursor: pointer; color: var(--ink-2); }
+  .tabs button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  textarea { width: 100%; min-height: 120px; font-family: inherit; font-size: 13.5px;
+    padding: 10px; border: 1px solid var(--grid); border-radius: 9px; resize: vertical; }
+  .preview { font-size: 12.5px; color: var(--ink-2); background: var(--page);
+    border-radius: 8px; padding: 10px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .ghost { background: transparent; border: 1px solid var(--grid); color: var(--ink-2);
+    border-radius: 9px; padding: 10px 14px; font-family: inherit; font-size: 13.5px; cursor: pointer; }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--ink); color: #fff; padding: 12px 20px; border-radius: 10px;
+    font-size: 13.5px; z-index: 3000; transition: transform .25s; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<aside>
+  <div>
+    <h1>Close to Home <span class="badge-demo">DEMO · MOCK DATA</span></h1>
+    <div class="subtitle">Who in your database can actually make it to your event?</div>
+  </div>
+
+  <div>
+    <label class="field-label">Mode</label>
+    <div class="seg">
+      <button id="mode-event" class="active">Planned event</button>
+      <button id="mode-scout">Scout a location</button>
+    </div>
+  </div>
+
+  <div id="event-picker">
+    <label class="field-label">Event</label>
+    <select id="event-select"></select>
+  </div>
+  <div class="scout-hint" id="scout-hint">
+    Click anywhere on the map to test a location — we'll show how many people
+    in your database are within the drive-time you pick.
+  </div>
+
+  <div>
+    <label class="field-label">Drive time</label>
+    <input type="range" id="minutes" min="0" max="5" step="1" value="2">
+    <div class="slider-labels"><span>10</span><span>15</span><span>20</span><span>30</span><span>45</span><span>60</span></div>
+    <div class="slider-value">within a <b id="minutes-label">20</b>-minute drive</div>
+  </div>
+
+  <div class="hero">
+    <div class="big"><span id="stat-inside">–</span> <small>of <span id="stat-total">–</span> people</small></div>
+    <div class="cap" id="hero-cap">within a 20-minute drive of this event</div>
+  </div>
+  <div class="tiles">
+    <div class="tile"><div class="v" id="stat-donors">–</div><div class="k">donors in range · <span id="stat-amount">$0</span> lifetime</div></div>
+    <div class="tile"><div class="v" id="stat-vols">–</div><div class="k">past volunteers in range</div></div>
+  </div>
+
+  <div class="legend">
+    <span class="in">In range</span><span class="out">Out of range</span><span class="poly">Drive-time area</span>
+  </div>
+
+  <div class="list-wrap">
+    <div class="list-head">
+      <label class="field-label" style="margin:0">People in range</label>
+      <span class="n" id="list-count"></span>
+    </div>
+    <ul id="people-list"></ul>
+  </div>
+
+  <button class="cta" id="draft-btn" disabled>Draft outreach to people in range</button>
+</aside>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div>
+      <h2>Draft outreach</h2>
+      <div class="sub">Sending to <b id="modal-count">0</b> people in range via NGP <span class="badge-demo">MOCKED</span></div>
+    </div>
+    <div class="tabs">
+      <button id="tab-text" class="active">Text message</button>
+      <button id="tab-email" >Email</button>
+    </div>
+    <textarea id="message"></textarea>
+    <div class="preview"><b>Preview for <span id="preview-name"></span>:</b><br><span id="preview-body"></span></div>
+    <div class="modal-actions">
+      <button class="ghost" id="cancel-btn">Cancel</button>
+      <button class="cta" id="send-btn">Send via NGP</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const DETENTS = [10, 15, 20, 30, 45, 60];
+const state = {
+  people: [], events: [], mode: "event",
+  origin: null, originLabel: "", minutes: 20,
+  insideIds: new Set(), queuedIds: new Set(),
+  currentEvent: null, channel: "text",
+};
+
+const map = L.map("map", { preferCanvas: true, zoomControl: true }).setView([38.56, -121.47], 11);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+}).addTo(map);
+
+let polygonLayer = null, originMarker = null;
+const dotLayers = new Map(); // vanId -> circleMarker
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function dotStyle(inside) {
+  return inside
+    ? { radius: 5, color: "#fff", weight: 1.5, fillColor: css("--inside"), fillOpacity: 0.95 }
+    : { radius: 3.5, color: "transparent", weight: 0, fillColor: css("--outside"), fillOpacity: 0.45 };
+}
+
+async function init() {
+  const [pRes, eRes] = await Promise.all([fetch("/api/people"), fetch("/api/events")]);
+  state.people = (await pRes.json()).people;
+  state.events = (await eRes.json()).events;
+
+  const sel = document.getElementById("event-select");
+  state.events.forEach((ev) => {
+    const o = document.createElement("option");
+    o.value = ev.eventId;
+    o.textContent = `${ev.name} — ${ev.venue} (${ev.dateLabel})`;
+    sel.appendChild(o);
+  });
+
+  state.people.forEach((p) => {
+    const m = L.circleMarker([p.lat, p.lng], dotStyle(false)).addTo(map);
+    const badges = [p.contributionSummary ? "Donor" : null, p.isVolunteer ? "Volunteer" : null]
+      .filter(Boolean).join(" · ");
+    m.bindTooltip(`<b>${p.firstName} ${p.lastName}</b><br>${p.neighborhood}${badges ? "<br>" + badges : ""}`);
+    dotLayers.set(p.vanId, m);
+  });
+
+  document.getElementById("stat-total").textContent = state.people.length;
+  selectEvent(state.events[0].eventId);
+}
+
+function setOrigin(lat, lng, label) {
+  state.origin = { lat, lng };
+  state.originLabel = label;
+  if (originMarker) originMarker.remove();
+  originMarker = L.marker([lat, lng]).addTo(map).bindTooltip(label, { permanent: false });
+  refresh();
+}
+
+function selectEvent(eventId) {
+  const ev = state.events.find((e) => e.eventId == eventId);
+  state.currentEvent = ev;
+  map.setView([ev.lat, ev.lng], 12);
+  setOrigin(ev.lat, ev.lng, `${ev.name} — ${ev.venue}`);
+}
+
+async function refresh() {
+  if (!state.origin) return;
+  const res = await fetch("/api/reachable", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ lat: state.origin.lat, lng: state.origin.lng, minutes: state.minutes }),
+  });
+  const data = await res.json();
+
+  if (polygonLayer) polygonLayer.remove();
+  polygonLayer = L.geoJSON(
+    { type: "Feature", geometry: data.polygon },
+    { style: { color: css("--iso"), weight: 2, fillColor: css("--iso"), fillOpacity: 0.13 } }
+  ).addTo(map);
+
+  state.insideIds = new Set(data.insideVanIds);
+  dotLayers.forEach((m, vanId) => m.setStyle(dotStyle(state.insideIds.has(vanId))));
+
+  const s = data.stats;
+  document.getElementById("stat-inside").textContent = s.inside;
+  document.getElementById("stat-donors").textContent = s.donorsInside;
+  document.getElementById("stat-amount").textContent = "$" + s.donorTotalAmount.toLocaleString();
+  document.getElementById("stat-vols").textContent = s.volunteersInside;
+  document.getElementById("hero-cap").textContent =
+    `within a ${state.minutes}-minute drive of ` +
+    (state.mode === "event" ? "this event" : "the scouted location");
+  document.getElementById("draft-btn").disabled = s.inside === 0;
+  renderList();
+}
+
+function renderList() {
+  const ul = document.getElementById("people-list");
+  ul.innerHTML = "";
+  const inside = state.people.filter((p) => state.insideIds.has(p.vanId));
+  document.getElementById("list-count").textContent = `${inside.length} people`;
+  inside.slice(0, 200).forEach((p) => {
+    const li = document.createElement("li");
+    const addr = p.addresses[0];
+    const chips = [];
+    if (p.contributionSummary)
+      chips.push(`<span class="chip">Donor · $${Math.round(p.contributionSummary.totalAmount).toLocaleString()}</span>`);
+    if (p.isVolunteer) chips.push(`<span class="chip">Volunteer</span>`);
+    li.innerHTML =
+      `<div><div class="p-name">${p.firstName} ${p.lastName}</div>` +
+      `<div class="p-addr">${addr.addressLine1}, ${addr.city}</div></div>` +
+      `<div class="chips">${state.queuedIds.has(p.vanId) ? '<span class="queued">✓ queued</span>' : chips.join("")}</div>`;
+    ul.appendChild(li);
+  });
+}
+
+/* ---------- controls ---------- */
+document.getElementById("minutes").addEventListener("input", (e) => {
+  state.minutes = DETENTS[+e.target.value];
+  document.getElementById("minutes-label").textContent = state.minutes;
+});
+document.getElementById("minutes").addEventListener("change", refresh);
+
+document.getElementById("event-select").addEventListener("change", (e) => selectEvent(e.target.value));
+
+function setMode(mode) {
+  state.mode = mode;
+  document.getElementById("mode-event").classList.toggle("active", mode === "event");
+  document.getElementById("mode-scout").classList.toggle("active", mode === "scout");
+  document.getElementById("event-picker").style.display = mode === "event" ? "" : "none";
+  document.getElementById("scout-hint").style.display = mode === "scout" ? "block" : "none";
+  if (mode === "event" && state.currentEvent) selectEvent(state.currentEvent.eventId);
+}
+document.getElementById("mode-event").addEventListener("click", () => setMode("event"));
+document.getElementById("mode-scout").addEventListener("click", () => setMode("scout"));
+map.on("click", (e) => {
+  if (state.mode === "scout")
+    setOrigin(e.latlng.lat, e.latlng.lng, `Scouted location (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`);
+});
+
+/* ---------- outreach modal ---------- */
+const TEMPLATES = {
+  text: (ev, mins) =>
+    `Hi {firstName}! Our ${ev ? ev.name : "event"} is ${ev ? ev.dateLabel : "coming up"} at ${ev ? ev.venue : "a spot near you"} — just a ${mins}-minute drive from you. Can we count you in? Reply YES and we'll save you a spot.`,
+  email: (ev, mins) =>
+    `Hi {firstName},\n\nWe're holding our ${ev ? ev.name : "event"} on ${ev ? ev.dateLabel : "soon"} at ${ev ? ev.venue : "a location near you"} (${ev ? ev.address : ""}) — it's less than a ${mins}-minute drive from your place.\n\nWe'd love to see you there. RSVP with one click below.\n\n— The Campaign Team`,
+};
+
+function openModal() {
+  document.getElementById("modal-count").textContent = state.insideIds.size;
+  setChannel(state.channel);
+  document.getElementById("overlay").classList.add("open");
+}
+function setChannel(ch) {
+  state.channel = ch;
+  document.getElementById("tab-text").classList.toggle("active", ch === "text");
+  document.getElementById("tab-email").classList.toggle("active", ch === "email");
+  document.getElementById("message").value = TEMPLATES[ch](state.mode === "event" ? state.currentEvent : null, state.minutes);
+  updatePreview();
+}
+function updatePreview() {
+  const first = state.people.find((p) => state.insideIds.has(p.vanId));
+  document.getElementById("preview-name").textContent = first ? `${first.firstName} ${first.lastName}` : "—";
+  document.getElementById("preview-body").textContent = document
+    .getElementById("message").value.replaceAll("{firstName}", first ? first.firstName : "friend");
+}
+document.getElementById("message").addEventListener("input", updatePreview);
+document.getElementById("tab-text").addEventListener("click", () => setChannel("text"));
+document.getElementById("tab-email").addEventListener("click", () => setChannel("email"));
+document.getElementById("draft-btn").addEventListener("click", openModal);
+document.getElementById("cancel-btn").addEventListener("click", () =>
+  document.getElementById("overlay").classList.remove("open"));
+
+document.getElementById("send-btn").addEventListener("click", () => {
+  state.insideIds.forEach((id) => state.queuedIds.add(id));
+  document.getElementById("overlay").classList.remove("open");
+  const toast = document.getElementById("toast");
+  toast.textContent = `✓ ${state.insideIds.size} ${state.channel === "text" ? "texts" : "emails"} queued in NGP (mocked)`;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 3500);
+  renderList();
+});
+
+init();
+</script>
+</body>
+</html>
